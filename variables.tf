@@ -38,6 +38,17 @@ variable "address_space" {
   type        = list(string)
 }
 
+variable "app_repository_owner" {
+  description = "GitHub owner of the repo that deploys into this landing zone."
+  type        = string
+  default     = "graemewales13"
+}
+
+variable "app_repository_name" {
+  type    = string
+  default = "gw-webapp"
+}
+
 variable "budget_amount" {
   description = "Monthly budget in the billing currency (GBP)."
   type        = number

@@ -76,8 +76,8 @@ module "landing_zone" {
     }
   }
 
-  # The app pipeline's identity. Its GitHub login (federated credential) is
-  # added once gw-webapp's environments are settled.
+  # The app pipeline's identity. It only trusts jobs in the app repo's GitHub
+  # environment of the same name, so nonprod runs can't log in to prod.
   umi_enabled = true
   user_managed_identities = {
     deploy = {
@@ -87,6 +87,15 @@ module "landing_zone" {
       role_assignments = {
         subscription_contributor = {
           definition = "Contributor"
+        }
+      }
+      federated_credentials_github = {
+        app = {
+          name         = "github-${var.app_repository_owner}-${var.app_repository_name}-${var.environment}"
+          organization = var.app_repository_owner
+          repository   = var.app_repository_name
+          entity       = "environment"
+          value        = var.environment
         }
       }
     }
