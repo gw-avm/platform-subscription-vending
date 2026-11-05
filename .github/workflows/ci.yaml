@@ -52,3 +52,17 @@ jobs:
     uses: ./.github/workflows/ci-template.yaml
     with:
       landing_zone: ${{ matrix.landing_zone }}
+
+  # One fixed check name for the branch rule, however many landing zones
+  # there are. always() so it fails, rather than skips, when a job fails:
+  # GitHub treats a skipped required check as passed.
+  result:
+    name: CI Result
+    if: always()
+    needs: [validate, plan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check All Jobs Passed
+        run: |
+          echo "validate: ${{ needs.validate.result }}, plan: ${{ needs.plan.result }}"
+          [ "${{ needs.validate.result }}" = "success" ] && [ "${{ needs.plan.result }}" = "success" ]
