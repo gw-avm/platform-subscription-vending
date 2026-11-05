@@ -89,13 +89,13 @@ module "landing_zone" {
           definition = "Contributor"
         }
       }
-      federated_credentials_github = {
+      # "advanced" because GitHub issues immutable subjects (owner and repo IDs
+      # as well as names), which the module's GitHub option doesn't build.
+      federated_credentials_advanced = {
         app = {
-          name         = "github-${var.app_repository_owner}-${var.app_repository_name}-${var.environment}"
-          organization = var.app_repository_owner
-          repository   = var.app_repository_name
-          entity       = "environment"
-          value        = var.environment
+          name               = "github-${var.app_repository.owner}-${var.app_repository.name}-${var.environment}"
+          subject_identifier = "repo:${var.app_repository.owner}@${var.app_repository.owner_id}/${var.app_repository.name}@${var.app_repository.repo_id}:environment:${var.environment}"
+          issuer_url         = "https://token.actions.githubusercontent.com"
         }
       }
     }

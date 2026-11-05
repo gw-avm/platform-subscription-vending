@@ -38,15 +38,20 @@ variable "address_space" {
   type        = list(string)
 }
 
-variable "app_repository_owner" {
-  description = "GitHub owner of the repo that deploys into this landing zone."
-  type        = string
-  default     = "graemewales13"
-}
-
-variable "app_repository_name" {
-  type    = string
-  default = "gw-webapp"
+variable "app_repository" {
+  description = "GitHub repo that deploys into this landing zone. IDs from: gh api repos/<owner>/<name> (.owner.id, .id)."
+  type = object({
+    owner    = string
+    owner_id = number
+    name     = string
+    repo_id  = number
+  })
+  default = {
+    owner    = "graemewales13"
+    owner_id = 69304111
+    name     = "gw-webapp"
+    repo_id  = 1437058694
+  }
 }
 
 variable "budget_amount" {
