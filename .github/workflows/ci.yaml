@@ -49,6 +49,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/landing-zone.yaml
+    uses: ./.github/workflows/ci-template.yaml
     with:
       landing_zone: ${{ matrix.landing_zone }}

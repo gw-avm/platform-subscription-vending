@@ -1,7 +1,7 @@
 ---
-# Plans (and optionally applies) one landing zone: its own tfvars file and its
-# own state file, as Microsoft recommends for workload landing zones.
-name: Landing Zone
+# Plans one landing zone, then applies that plan after approval. Each landing
+# zone has its own tfvars file and its own state file, as Microsoft recommends.
+name: Continuous Delivery
 on:
   workflow_call:
     inputs:
@@ -9,10 +9,6 @@ on:
         description: 'Landing zone name: matches landing-zones/<name>.tfvars'
         required: true
         type: string
-      apply:
-        description: 'Apply the plan after approval'
-        default: false
-        type: boolean
       terraform_cli_version:
         default: '1.14.9'
         type: string
@@ -64,7 +60,6 @@ jobs:
 
       # The apply job uses this exact plan, so what you approve is what runs.
       - name: Publish Plan Artifact
-        if: inputs.apply
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plan-${{ inputs.landing_zone }}
@@ -77,7 +72,6 @@ jobs:
 
   apply:
     name: Apply ${{ inputs.landing_zone }}
-    if: inputs.apply
     needs: plan
     runs-on: ubuntu-latest
     concurrency: tfstate-${{ inputs.landing_zone }}
