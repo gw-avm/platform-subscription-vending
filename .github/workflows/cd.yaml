@@ -1,0 +1,39 @@
+---
+name: 02 Vending Continuous Delivery
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    name: List Landing Zones
+    runs-on: ubuntu-latest
+    outputs:
+      landing_zones: ${{ steps.list.outputs.landing_zones }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: List Landing Zones
+        id: list
+        run: echo "landing_zones=$(find landing-zones -name '*.tfvars' -printf '%f\n' | sed 's/\.tfvars$//' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    needs: list
+    strategy:
+      fail-fast: false
+      matrix:
+        landing_zone: ${{ fromJSON(needs.list.outputs.landing_zones) }}
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/landing-zone.yaml
+    with:
+      landing_zone: ${{ matrix.landing_zone }}
+      apply: true

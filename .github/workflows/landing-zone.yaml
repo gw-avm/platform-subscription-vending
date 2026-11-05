@@ -1,0 +1,112 @@
+---
+# Plans (and optionally applies) one landing zone: its own tfvars file and its
+# own state file, as Microsoft recommends for workload landing zones.
+name: Landing Zone
+on:
+  workflow_call:
+    inputs:
+      landing_zone:
+        description: 'Landing zone name: matches landing-zones/<name>.tfvars'
+        required: true
+        type: string
+      apply:
+        description: 'Apply the plan after approval'
+        default: false
+        type: boolean
+      terraform_cli_version:
+        default: '1.14.9'
+        type: string
+
+env:
+  ARM_TENANT_ID: "${{ vars.AZURE_TENANT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+  ARM_USE_AZUREAD: true
+  ARM_USE_OIDC: true
+
+jobs:
+  plan:
+    name: Plan ${{ inputs.landing_zone }}
+    runs-on: ubuntu-latest
+    concurrency: tfstate-${{ inputs.landing_zone }}
+    environment: vending-prod-plan
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+          terraform_version: ${{ inputs.terraform_cli_version }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+          -backend-config="resource_group_name=${{ vars.BACKEND_AZURE_RESOURCE_GROUP_NAME }}" \
+          -backend-config="storage_account_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_NAME }}" \
+          -backend-config="container_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_NAME }}" \
+          -backend-config="key=${{ inputs.landing_zone }}.tfstate"
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+          -input=false \
+          -var-file="landing-zones/${{ inputs.landing_zone }}.tfvars" \
+          -out=tfplan
+
+      - name: Show the Plan for Review
+        run: terraform show tfplan
+
+      # The apply job uses this exact plan, so what you approve is what runs.
+      - name: Publish Plan Artifact
+        if: inputs.apply
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plan-${{ inputs.landing_zone }}
+          include-hidden-files: true # .terraform.lock.hcl
+          retention-days: 1
+          path: |
+            .
+            !.git/**
+            !.terraform/**
+
+  apply:
+    name: Apply ${{ inputs.landing_zone }}
+    if: inputs.apply
+    needs: plan
+    runs-on: ubuntu-latest
+    concurrency: tfstate-${{ inputs.landing_zone }}
+    environment: vending-prod-apply
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+      AZAPI_RETRY_GET_AFTER_PUT_MAX_TIME: "60m" # Management group permissions propagate slowly
+    steps:
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plan-${{ inputs.landing_zone }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+          terraform_version: ${{ inputs.terraform_cli_version }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+          -backend-config="resource_group_name=${{ vars.BACKEND_AZURE_RESOURCE_GROUP_NAME }}" \
+          -backend-config="storage_account_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_NAME }}" \
+          -backend-config="container_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_NAME }}" \
+          -backend-config="key=${{ inputs.landing_zone }}.tfstate"
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve tfplan
