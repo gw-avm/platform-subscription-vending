@@ -111,5 +111,26 @@ module "landing_zone" {
         }
       }
     }
+
+    # Read-only identity for plans on pull requests, the same split as the
+    # platform and vending pipelines. Trusts the app repo's <env>-plan
+    # environment, which (unlike <env>) any branch can use.
+    plan = {
+      name               = "id-apps-plan-${local.suffix}"
+      resource_group_key = "identity"
+      tags               = var.tags
+      role_assignments = {
+        subscription_reader = {
+          definition = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7" # Reader
+        }
+      }
+      federated_credentials_advanced = {
+        app = {
+          name               = "github-${var.app_repository.owner}-${var.app_repository.name}-${var.environment}-plan"
+          subject_identifier = "repo:${var.app_repository.owner}@${var.app_repository.owner_id}/${var.app_repository.name}@${var.app_repository.repo_id}:environment:${var.environment}-plan"
+          issuer_url         = "https://token.actions.githubusercontent.com"
+        }
+      }
+    }
   }
 }

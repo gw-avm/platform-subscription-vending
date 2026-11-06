@@ -10,6 +10,10 @@ output "deploy_identity_client_id" {
   value = module.landing_zone.umi_client_ids["deploy"]
 }
 
+output "plan_identity_client_id" {
+  value = module.landing_zone.umi_client_ids["plan"]
+}
+
 # The app repo's backend settings.
 output "app_state" {
   value = {
