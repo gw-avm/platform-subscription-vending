@@ -29,6 +29,10 @@ module "landing_zone" {
       name = "rg-apps-identity-${local.suffix}"
       tags = var.tags
     }
+    tfstate = {
+      name = "rg-apps-tfstate-${local.suffix}"
+      tags = var.tags
+    }
   }
 
   # Vending creates the empty spoke and its hub peering; the app repo creates
@@ -87,6 +91,14 @@ module "landing_zone" {
       role_assignments = {
         subscription_contributor = {
           definition = "Contributor"
+        }
+        # Contributor can't create role assignments, and the app needs a few
+        # (AcrPull for the container app, blob access for the VM). This lets
+        # it grant only the roles in local.app_assignable_role_ids.
+        subscription_constrained_rbac_admin = {
+          definition        = "/providers/Microsoft.Authorization/roleDefinitions/f58310d9-a9f6-439a-9e8d-f62e7b41a168" # Role Based Access Control Administrator
+          condition         = local.app_assignable_roles_condition
+          condition_version = "2.0"
         }
       }
       # "advanced" because GitHub issues immutable subjects (owner and repo IDs

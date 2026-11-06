@@ -47,11 +47,17 @@ variable "app_repository" {
     repo_id  = number
   })
   default = {
-    owner    = "graemewales13"
-    owner_id = 69304111
+    owner    = "gw-avm"
+    owner_id = 351889910
     name     = "gw-webapp"
     repo_id  = 1437058694
   }
+}
+
+variable "postgres_private_dns_zone_id" {
+  description = "The platform's central privatelink.postgres.database.azure.com zone."
+  type        = string
+  default     = "/subscriptions/ce882887-4b87-4377-bc63-076ec3c22a85/resourceGroups/rg-connectivity-dns-prod-eastasia-001/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com"
 }
 
 variable "budget_amount" {
