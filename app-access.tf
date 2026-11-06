@@ -70,10 +70,11 @@ resource "azapi_resource" "app_state" {
   }
 }
 
-resource "azapi_resource" "app_state_blob_service" {
-  type      = "Microsoft.Storage/storageAccounts/blobServices@2023-05-01"
-  name      = "default"
-  parent_id = azapi_resource.app_state.id
+# Azure creates the "default" blob service with the account, so this updates
+# it rather than creating it.
+resource "azapi_update_resource" "app_state_blob_service" {
+  type        = "Microsoft.Storage/storageAccounts/blobServices@2023-05-01"
+  resource_id = "${azapi_resource.app_state.id}/blobServices/default"
 
   body = {
     properties = {
@@ -93,13 +94,16 @@ resource "azapi_resource" "app_state_blob_service" {
 resource "azapi_resource" "app_state_container" {
   type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01"
   name      = "tfstate"
-  parent_id = azapi_resource.app_state_blob_service.id
+  parent_id = "${azapi_resource.app_state.id}/blobServices/default"
 
   body = {
     properties = {
       publicAccess = "None"
     }
   }
+
+  # Versioning and soft delete are on before the container exists.
+  depends_on = [azapi_update_resource.app_state_blob_service]
 }
 
 # --- Role assignments outside the module ---------------------------------------
