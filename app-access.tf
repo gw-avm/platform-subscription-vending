@@ -128,6 +128,21 @@ resource "azapi_resource" "deploy_state_access" {
   }
 }
 
+# Plans also need to read and lock state.
+resource "azapi_resource" "plan_state_access" {
+  type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
+  name      = uuidv5("url", "${azapi_resource.app_state_container.id}/plan/state")
+  parent_id = azapi_resource.app_state_container.id
+
+  body = {
+    properties = {
+      principalId      = module.landing_zone.umi_principal_ids["plan"]
+      principalType    = "ServicePrincipal"
+      roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe" # Storage Blob Data Contributor
+    }
+  }
+}
+
 # The vending bootstrap lets the apply identity grant only this role on this
 # one zone.
 resource "azapi_resource" "deploy_dns_zone_access" {
