@@ -30,6 +30,8 @@ jobs:
       contents: read
     env:
       ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,18 +50,28 @@ jobs:
           -backend-config="container_name=${{ vars.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_NAME }}" \
           -backend-config="key=${{ inputs.landing_zone }}.tfstate"
 
+      # -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes. Apply (and
+      # its approval) only runs when there is something to change.
       - name: Terraform Plan
+        id: plan
         run: |
+          set +e
           terraform plan \
           -input=false \
           -var-file="landing-zones/${{ inputs.landing_zone }}.tfvars" \
-          -out=tfplan
+          -out=tfplan \
+          -detailed-exitcode
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then exit 1; fi
+          echo "has_changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Show the Plan for Review
         run: terraform show tfplan
 
       # The apply job uses this exact plan, so what you approve is what runs.
       - name: Publish Plan Artifact
+        if: steps.plan.outputs.has_changes == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plan-${{ inputs.landing_zone }}
@@ -73,6 +85,7 @@ jobs:
   apply:
     name: Apply ${{ inputs.landing_zone }}
     needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     concurrency: tfstate-${{ inputs.landing_zone }}
     environment: vending-prod-apply
