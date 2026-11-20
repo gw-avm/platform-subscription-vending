@@ -19,7 +19,10 @@ module "landing_zone" {
   subscription_display_name                         = var.subscription_display_name
   subscription_tags                                 = var.tags
 
-  resource_group_creation_enabled = true
+  # Everything below except the budget is for app landing zones only. A
+  # sandbox gets placement, name, tags and budget, and no network: the
+  # sandbox guardrails deny peering it to the hub.
+  resource_group_creation_enabled = var.app_landing_zone
   resource_groups = {
     network = {
       name = "rg-apps-network-${local.suffix}"
@@ -37,8 +40,10 @@ module "landing_zone" {
 
   # Vending creates the empty spoke and its hub peering; the app repo creates
   # subnets (each with an NSG, which policy requires on landingzones).
-  virtual_network_enabled = true
-  virtual_networks = {
+  # The module validates the map even when disabled, so a sandbox (no
+  # address_space) passes an empty one.
+  virtual_network_enabled = var.app_landing_zone
+  virtual_networks = { for k, v in {
     spoke = {
       name               = "vnet-apps-${local.suffix}"
       address_space      = var.address_space
@@ -57,13 +62,13 @@ module "landing_zone" {
         allow_gateway_transit = false
       }
     }
-  }
+  } : k => v if var.app_landing_zone }
 
   # Alerts only: Pay-As-You-Go budgets can't stop spending.
   budget_enabled = true
   budgets = {
     monthly = {
-      name              = "budget-apps-${local.suffix}"
+      name              = "budget-${var.workload}-${local.suffix}"
       amount            = var.budget_amount
       time_grain        = "Monthly"
       time_period_start = "2026-11-01T00:00:00Z"
@@ -82,7 +87,7 @@ module "landing_zone" {
 
   # The app pipeline's identity. It only trusts jobs in the app repo's GitHub
   # environment of the same name, so nonprod runs can't log in to prod.
-  umi_enabled = true
+  umi_enabled = var.app_landing_zone
   user_managed_identities = {
     deploy = {
       name               = "id-apps-deploy-${local.suffix}"

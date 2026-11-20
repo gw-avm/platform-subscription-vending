@@ -44,6 +44,8 @@ locals {
 # no keys, ZRS, versioning and soft delete.
 
 resource "azapi_resource" "app_state" {
+  count = var.app_landing_zone ? 1 : 0
+
   type      = "Microsoft.Storage/storageAccounts@2023-05-01"
   name      = "stgwapps${var.environment}tf001"
   parent_id = module.landing_zone.resource_group_resource_ids["tfstate"]
@@ -73,8 +75,10 @@ resource "azapi_resource" "app_state" {
 # Azure creates the "default" blob service with the account, so this updates
 # it rather than creating it.
 resource "azapi_update_resource" "app_state_blob_service" {
+  count = var.app_landing_zone ? 1 : 0
+
   type        = "Microsoft.Storage/storageAccounts/blobServices@2023-05-01"
-  resource_id = "${azapi_resource.app_state.id}/blobServices/default"
+  resource_id = "${azapi_resource.app_state[0].id}/blobServices/default"
 
   body = {
     properties = {
@@ -92,9 +96,11 @@ resource "azapi_update_resource" "app_state_blob_service" {
 }
 
 resource "azapi_resource" "app_state_container" {
+  count = var.app_landing_zone ? 1 : 0
+
   type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01"
   name      = "tfstate"
-  parent_id = "${azapi_resource.app_state.id}/blobServices/default"
+  parent_id = "${azapi_resource.app_state[0].id}/blobServices/default"
 
   body = {
     properties = {
@@ -110,18 +116,16 @@ resource "azapi_resource" "app_state_container" {
 # The module only scopes role assignments inside the landing zone subscription
 # and can't depend on the container, so these two are created directly.
 
-locals {
-  deploy_principal_id = module.landing_zone.umi_principal_ids["deploy"]
-}
-
 resource "azapi_resource" "deploy_state_access" {
+  count = var.app_landing_zone ? 1 : 0
+
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = uuidv5("url", "${azapi_resource.app_state_container.id}/deploy/state")
-  parent_id = azapi_resource.app_state_container.id
+  name      = uuidv5("url", "${azapi_resource.app_state_container[0].id}/deploy/state")
+  parent_id = azapi_resource.app_state_container[0].id
 
   body = {
     properties = {
-      principalId      = local.deploy_principal_id
+      principalId      = module.landing_zone.umi_principal_ids["deploy"]
       principalType    = "ServicePrincipal"
       roleDefinitionId = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe" # Storage Blob Data Contributor
     }
@@ -130,9 +134,11 @@ resource "azapi_resource" "deploy_state_access" {
 
 # Plans also need to read and lock state.
 resource "azapi_resource" "plan_state_access" {
+  count = var.app_landing_zone ? 1 : 0
+
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = uuidv5("url", "${azapi_resource.app_state_container.id}/plan/state")
-  parent_id = azapi_resource.app_state_container.id
+  name      = uuidv5("url", "${azapi_resource.app_state_container[0].id}/plan/state")
+  parent_id = azapi_resource.app_state_container[0].id
 
   body = {
     properties = {
@@ -146,15 +152,49 @@ resource "azapi_resource" "plan_state_access" {
 # The vending bootstrap lets the apply identity grant only this role on this
 # one zone.
 resource "azapi_resource" "deploy_dns_zone_access" {
+  count = var.app_landing_zone ? 1 : 0
+
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
   name      = uuidv5("url", "${var.postgres_private_dns_zone_id}/${var.subscription_id}/deploy")
   parent_id = var.postgres_private_dns_zone_id
 
   body = {
     properties = {
-      principalId      = local.deploy_principal_id
+      principalId      = module.landing_zone.umi_principal_ids["deploy"]
       principalType    = "ServicePrincipal"
       roleDefinitionId = "${split("/resourceGroups/", var.postgres_private_dns_zone_id)[0]}/providers/Microsoft.Authorization/roleDefinitions/b12aa53e-6015-4669-85d0-8515ebb3ae7f" # Private DNS Zone Contributor
     }
   }
+}
+
+# These became count resources when sandboxes were added; keep the existing
+# app landing zones' resources in place.
+moved {
+  from = azapi_resource.app_state
+  to   = azapi_resource.app_state[0]
+}
+
+moved {
+  from = azapi_update_resource.app_state_blob_service
+  to   = azapi_update_resource.app_state_blob_service[0]
+}
+
+moved {
+  from = azapi_resource.app_state_container
+  to   = azapi_resource.app_state_container[0]
+}
+
+moved {
+  from = azapi_resource.deploy_state_access
+  to   = azapi_resource.deploy_state_access[0]
+}
+
+moved {
+  from = azapi_resource.plan_state_access
+  to   = azapi_resource.plan_state_access[0]
+}
+
+moved {
+  from = azapi_resource.deploy_dns_zone_access
+  to   = azapi_resource.deploy_dns_zone_access[0]
 }

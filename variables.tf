@@ -1,10 +1,22 @@
+variable "app_landing_zone" {
+  description = "true: the gw-webapp landing zone (spoke VNet, app identities, state, DNS access). false: a sandbox (placement, name, tags and budget only)."
+  type        = bool
+  default     = true
+}
+
+variable "workload" {
+  description = "Workload name in resource names, e.g. budget-<workload>-<environment>-<region>-001."
+  type        = string
+  default     = "apps"
+}
+
 variable "environment" {
-  description = "Landing zone environment, used in resource names: nonprod or prod."
+  description = "Landing zone environment, used in resource names: dev, nonprod or prod."
   type        = string
 
   validation {
-    condition     = contains(["nonprod", "prod"], var.environment)
-    error_message = "environment must be nonprod or prod."
+    condition     = contains(["dev", "nonprod", "prod"], var.environment)
+    error_message = "environment must be dev, nonprod or prod."
   }
 }
 
@@ -34,8 +46,14 @@ variable "hub_virtual_network_id" {
 }
 
 variable "address_space" {
-  description = "Spoke VNet range. Must not overlap the hub (10.0.0.0/22) or other spokes."
+  description = "Spoke VNet range. Must not overlap the hub (10.0.0.0/22) or other spokes. App landing zones only."
   type        = list(string)
+  default     = null
+
+  validation {
+    condition     = !var.app_landing_zone || var.address_space != null
+    error_message = "App landing zones need an address_space."
+  }
 }
 
 variable "app_repository" {
