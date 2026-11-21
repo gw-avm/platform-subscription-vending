@@ -1,29 +1,27 @@
 locals {
   # CAF: <type>-<workload>-<component>-<environment>-<region>-<###>
-  suffix = "${var.environment}-${var.location}-001"
-}
+  suffix  = "${var.environment}-${var.location}-001"
+  sandbox = !var.app_landing_zone
 
-module "landing_zone" {
-  source  = "Azure/avm-ptn-alz-sub-vending/azure"
-  version = "0.3.4"
+  # Alerts only: Pay-As-You-Go budgets can't stop spending.
+  budget_defaults = {
+    time_grain        = "Monthly"
+    time_period_start = "2026-11-01T00:00:00Z"
+    time_period_end   = "2031-10-31T00:00:00Z"
+    notifications = {
+      for threshold in [50, 80, 100] : "actual_${threshold}" => {
+        enabled        = true
+        operator       = "GreaterThanOrEqualTo"
+        threshold      = threshold
+        threshold_type = "Actual"
+        contact_emails = var.budget_contact_emails
+      }
+    }
+  }
 
-  location         = var.location
-  enable_telemetry = false
+  # --- App landing zone (empty for a sandbox) ---------------------------------
 
-  # Existing subscription: move it into its management group and keep its
-  # display name and tags in code.
-  subscription_id                                   = var.subscription_id
-  subscription_management_group_association_enabled = true
-  subscription_management_group_id                  = var.management_group_id
-  subscription_update_existing                      = true
-  subscription_display_name                         = var.subscription_display_name
-  subscription_tags                                 = var.tags
-
-  # Everything below except the budget is for app landing zones only. A
-  # sandbox gets placement, name, tags and budget, and no network: the
-  # sandbox guardrails deny peering it to the hub.
-  resource_group_creation_enabled = var.app_landing_zone
-  resource_groups = {
+  app_resource_groups = { for k, v in {
     network = {
       name = "rg-apps-network-${local.suffix}"
       tags = var.tags
@@ -36,59 +34,11 @@ module "landing_zone" {
       name = "rg-apps-tfstate-${local.suffix}"
       tags = var.tags
     }
-  }
-
-  # Vending creates the empty spoke and its hub peering; the app repo creates
-  # subnets (each with an NSG, which policy requires on landingzones).
-  # The module validates the map even when disabled, so a sandbox (no
-  # address_space) passes an empty one.
-  virtual_network_enabled = var.app_landing_zone
-  virtual_networks = { for k, v in {
-    spoke = {
-      name               = "vnet-apps-${local.suffix}"
-      address_space      = var.address_space
-      resource_group_key = "network"
-      tags               = var.tags
-
-      hub_network_resource_id  = var.hub_virtual_network_id
-      hub_peering_enabled      = true
-      hub_peering_name_tohub   = "peer-vnet-apps-${local.suffix}-to-hub"
-      hub_peering_name_fromhub = "peer-hub-to-vnet-apps-${local.suffix}"
-      # The hub has no VPN/ExpressRoute gateway, so neither side may use one.
-      hub_peering_options_tohub = {
-        use_remote_gateways = false
-      }
-      hub_peering_options_fromhub = {
-        allow_gateway_transit = false
-      }
-    }
   } : k => v if var.app_landing_zone }
 
-  # Alerts only: Pay-As-You-Go budgets can't stop spending.
-  budget_enabled = true
-  budgets = {
-    monthly = {
-      name              = "budget-${var.workload}-${local.suffix}"
-      amount            = var.budget_amount
-      time_grain        = "Monthly"
-      time_period_start = "2026-11-01T00:00:00Z"
-      time_period_end   = "2031-10-31T00:00:00Z"
-      notifications = {
-        for threshold in [50, 80, 100] : "actual_${threshold}" => {
-          enabled        = true
-          operator       = "GreaterThanOrEqualTo"
-          threshold      = threshold
-          threshold_type = "Actual"
-          contact_emails = var.budget_contact_emails
-        }
-      }
-    }
-  }
-
-  # The app pipeline's identity. It only trusts jobs in the app repo's GitHub
-  # environment of the same name, so nonprod runs can't log in to prod.
-  umi_enabled = var.app_landing_zone
-  user_managed_identities = {
+  app_identities = { for k, v in {
+    # The app pipeline's identity. It only trusts jobs in the app repo's GitHub
+    # environment of the same name, so nonprod runs can't log in to prod.
     deploy = {
       name               = "id-apps-deploy-${local.suffix}"
       resource_group_key = "identity"
@@ -137,5 +87,73 @@ module "landing_zone" {
         }
       }
     }
-  }
+  } : k => v if var.app_landing_zone }
+}
+
+module "landing_zone" {
+  source  = "Azure/avm-ptn-alz-sub-vending/azure"
+  version = "0.3.4"
+
+  location         = var.location
+  enable_telemetry = false
+
+  # Existing subscription: move it into its management group and keep its
+  # display name and tags in code.
+  subscription_id                                   = var.subscription_id
+  subscription_management_group_association_enabled = true
+  subscription_management_group_id                  = var.management_group_id
+  subscription_update_existing                      = true
+  subscription_display_name                         = var.subscription_display_name
+  subscription_tags                                 = var.tags
+
+  # Each landing zone type adds its own groups, identities and budgets; the
+  # other type's locals are empty (app here, sandbox in sandbox.tf).
+  resource_group_creation_enabled = true
+  resource_groups                 = merge(local.app_resource_groups, local.sandbox_resource_groups)
+
+  # A sandbox project's identity can't register providers (it only has rights
+  # on its resource group), so the sandbox subscription registers the
+  # providers it needs up front (sandbox.tf).
+  subscription_register_resource_providers_enabled      = local.sandbox
+  subscription_register_resource_providers_and_features = local.sandbox_resource_providers
+
+  # Vending creates the empty spoke and its hub peering; the app repo creates
+  # subnets (each with an NSG, which policy requires on landingzones).
+  # The module validates the map even when disabled, so a sandbox (no
+  # address_space) passes an empty one.
+  virtual_network_enabled = var.app_landing_zone
+  virtual_networks = { for k, v in {
+    spoke = {
+      name               = "vnet-apps-${local.suffix}"
+      address_space      = var.address_space
+      resource_group_key = "network"
+      tags               = var.tags
+
+      hub_network_resource_id  = var.hub_virtual_network_id
+      hub_peering_enabled      = true
+      hub_peering_name_tohub   = "peer-vnet-apps-${local.suffix}-to-hub"
+      hub_peering_name_fromhub = "peer-hub-to-vnet-apps-${local.suffix}"
+      # The hub has no VPN/ExpressRoute gateway, so neither side may use one.
+      hub_peering_options_tohub = {
+        use_remote_gateways = false
+      }
+      hub_peering_options_fromhub = {
+        allow_gateway_transit = false
+      }
+    }
+  } : k => v if var.app_landing_zone }
+
+  budget_enabled = true
+  budgets = merge(
+    {
+      monthly = merge(local.budget_defaults, {
+        name   = "budget-${var.workload}-${local.suffix}"
+        amount = var.budget_amount
+      })
+    },
+    local.sandbox_project_budgets,
+  )
+
+  umi_enabled             = true
+  user_managed_identities = merge(local.app_identities, local.sandbox_identities)
 }

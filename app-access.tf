@@ -39,15 +39,15 @@ locals {
   EOT
 }
 
-# --- App Terraform state -----------------------------------------------------
+# --- Terraform state account --------------------------------------------------
 # Same hardening as the platform and vending state accounts: Entra ID only,
-# no keys, ZRS, versioning and soft delete.
+# no keys, ZRS, versioning and soft delete. Every landing zone has one: an app
+# landing zone's holds the app's state, a sandbox's holds a container per
+# project (sandbox.tf).
 
 resource "azapi_resource" "app_state" {
-  count = var.app_landing_zone ? 1 : 0
-
   type      = "Microsoft.Storage/storageAccounts@2023-05-01"
-  name      = "stgwapps${var.environment}tf001"
+  name      = "stgw${var.workload}${var.environment}tf001"
   parent_id = module.landing_zone.resource_group_resource_ids["tfstate"]
   location  = var.location
   tags      = var.tags
@@ -75,10 +75,8 @@ resource "azapi_resource" "app_state" {
 # Azure creates the "default" blob service with the account, so this updates
 # it rather than creating it.
 resource "azapi_update_resource" "app_state_blob_service" {
-  count = var.app_landing_zone ? 1 : 0
-
   type        = "Microsoft.Storage/storageAccounts/blobServices@2023-05-01"
-  resource_id = "${azapi_resource.app_state[0].id}/blobServices/default"
+  resource_id = "${azapi_resource.app_state.id}/blobServices/default"
 
   body = {
     properties = {
@@ -100,7 +98,7 @@ resource "azapi_resource" "app_state_container" {
 
   type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01"
   name      = "tfstate"
-  parent_id = "${azapi_resource.app_state[0].id}/blobServices/default"
+  parent_id = "${azapi_resource.app_state.id}/blobServices/default"
 
   body = {
     properties = {
@@ -169,16 +167,6 @@ resource "azapi_resource" "deploy_dns_zone_access" {
 
 # These became count resources when sandboxes were added; keep the existing
 # app landing zones' resources in place.
-moved {
-  from = azapi_resource.app_state
-  to   = azapi_resource.app_state[0]
-}
-
-moved {
-  from = azapi_update_resource.app_state_blob_service
-  to   = azapi_update_resource.app_state_blob_service[0]
-}
-
 moved {
   from = azapi_resource.app_state_container
   to   = azapi_resource.app_state_container[0]

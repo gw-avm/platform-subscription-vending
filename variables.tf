@@ -1,7 +1,43 @@
 variable "app_landing_zone" {
-  description = "true: the gw-webapp landing zone (spoke VNet, app identities, state, DNS access). false: a sandbox (placement, name, tags and budget only)."
+  description = "true: the gw-webapp landing zone (spoke VNet, app identities, state, DNS access). false: the shared sandbox, with a resource group per entry in sandbox_projects."
   type        = bool
   default     = true
+}
+
+variable "sandbox_projects" {
+  description = <<-EOT
+    Sandbox projects, keyed by project slug (also its resource group, identity,
+    budget and state container name). Sandbox only.
+    - repository_owner / repository_name: the GitHub repo whose pushes and
+      dispatches on main may deploy. Defaults: graemewales13 / the key.
+    - expires_on: YYYY-MM-DD, the project's expires-on tag.
+    - budget_amount: monthly budget for the resource group, in GBP.
+    - terraform_state: true for a container in the shared state account. Leave
+      false for Bicep, or Terraform with HCP state.
+  EOT
+  type = map(object({
+    repository_owner = optional(string, "graemewales13")
+    repository_name  = optional(string)
+    expires_on       = string
+    budget_amount    = optional(number, 10)
+    terraform_state  = optional(bool, false)
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for k in keys(var.sandbox_projects) : can(regex("^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$", k))])
+    error_message = "Project keys must be 3-40 lowercase letters, digits and hyphens, starting and ending with a letter or digit."
+  }
+
+  validation {
+    condition     = alltrue([for p in values(var.sandbox_projects) : can(regex("^\\d{4}-\\d{2}-\\d{2}$", p.expires_on)) && can(formatdate("YYYY", "${p.expires_on}T00:00:00Z"))])
+    error_message = "expires_on must be a date in the form YYYY-MM-DD."
+  }
+
+  validation {
+    condition     = var.app_landing_zone == false || length(var.sandbox_projects) == 0
+    error_message = "sandbox_projects is for the sandbox landing zone only."
+  }
 }
 
 variable "workload" {
