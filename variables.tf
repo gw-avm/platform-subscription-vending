@@ -62,7 +62,7 @@ variable "location" {
 }
 
 variable "subscription_id" {
-  description = "Existing subscription to vend. Pay-As-You-Go can't create subscriptions in code."
+  description = "Existing subscription to vend. Pay-As-You-Go can't create subscriptions in code. Set by the pipeline from the SUBSCRIPTION_ID_<LANDING ZONE> secret."
   type        = string
 }
 
@@ -77,8 +77,9 @@ variable "management_group_id" {
 }
 
 variable "hub_virtual_network_id" {
-  type    = string
-  default = "/subscriptions/ce882887-4b87-4377-bc63-076ec3c22a85/resourceGroups/rg-connectivity-hub-prod-eastasia-001/providers/Microsoft.Network/virtualNetworks/vnet-connectivity-hub-prod-eastasia-001"
+  type        = string
+  default     = null
+  description = "Hub VNet ID. Defaults to the platform hub in the connectivity subscription."
 }
 
 variable "address_space" {
@@ -111,7 +112,7 @@ variable "app_repository" {
 variable "postgres_private_dns_zone_id" {
   description = "The platform's central privatelink.postgres.database.azure.com zone."
   type        = string
-  default     = "/subscriptions/ce882887-4b87-4377-bc63-076ec3c22a85/resourceGroups/rg-connectivity-dns-prod-eastasia-001/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com"
+  default     = null # defaults to the zone in the connectivity subscription
 }
 
 variable "budget_amount" {
@@ -120,9 +121,16 @@ variable "budget_amount" {
 }
 
 variable "budget_contact_emails" {
-  type = list(string)
+  description = "Set by the pipeline from the BUDGET_CONTACT_EMAIL secret."
+  type        = list(string)
 }
 
 variable "tags" {
   type = map(string)
+}
+
+variable "connectivity_subscription_id" {
+  description = "The platform connectivity subscription (hub VNet and central private DNS zones). Set by the pipeline from the SUBSCRIPTION_ID_CONNECTIVITY secret."
+  type        = string
+  nullable    = false
 }

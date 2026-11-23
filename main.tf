@@ -1,4 +1,9 @@
 locals {
+  # Platform resources in the connectivity subscription. The subscription ID is
+  # a secret, so these are built here rather than kept in the repo.
+  hub_virtual_network_id       = coalesce(var.hub_virtual_network_id, "/subscriptions/${var.connectivity_subscription_id}/resourceGroups/rg-connectivity-hub-prod-eastasia-001/providers/Microsoft.Network/virtualNetworks/vnet-connectivity-hub-prod-eastasia-001")
+  postgres_private_dns_zone_id = coalesce(var.postgres_private_dns_zone_id, "/subscriptions/${var.connectivity_subscription_id}/resourceGroups/rg-connectivity-dns-prod-eastasia-001/providers/Microsoft.Network/privateDnsZones/privatelink.postgres.database.azure.com")
+
   # CAF: <type>-<workload>-<component>-<environment>-<region>-<###>
   suffix  = "${var.environment}-${var.location}-001"
   sandbox = !var.app_landing_zone
@@ -129,7 +134,7 @@ module "landing_zone" {
       resource_group_key = "network"
       tags               = var.tags
 
-      hub_network_resource_id  = var.hub_virtual_network_id
+      hub_network_resource_id  = local.hub_virtual_network_id
       hub_peering_enabled      = true
       hub_peering_name_tohub   = "peer-vnet-apps-${local.suffix}-to-hub"
       hub_peering_name_fromhub = "peer-hub-to-vnet-apps-${local.suffix}"

@@ -14,8 +14,8 @@ on:
         type: string
 
 env:
-  ARM_TENANT_ID: "${{ vars.AZURE_TENANT_ID }}"
-  ARM_SUBSCRIPTION_ID: "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
   ARM_USE_AZUREAD: true
   ARM_USE_OIDC: true
 
@@ -29,7 +29,10 @@ jobs:
       id-token: write
       contents: read
     env:
-      ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      TF_VAR_connectivity_subscription_id: ${{ secrets.SUBSCRIPTION_ID_CONNECTIVITY }}
+      TF_VAR_budget_contact_emails: '["${{ secrets.BUDGET_CONTACT_EMAIL }}"]'
+      PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
     outputs:
       has_changes: ${{ steps.plan.outputs.has_changes }}
     steps:
@@ -41,6 +44,19 @@ jobs:
         with:
           terraform_wrapper: false
           terraform_version: ${{ inputs.terraform_cli_version }}
+
+      # Identifiers are secrets, so they're masked in this public repo's logs.
+      # Each landing zone's subscription ID is in SUBSCRIPTION_ID_<NAME>.
+      - name: Select the Subscription
+        env:
+          SUBSCRIPTION_ID_NONPROD: ${{ secrets.SUBSCRIPTION_ID_NONPROD }}
+          SUBSCRIPTION_ID_PROD: ${{ secrets.SUBSCRIPTION_ID_PROD }}
+          SUBSCRIPTION_ID_SANDBOX: ${{ secrets.SUBSCRIPTION_ID_SANDBOX }}
+        run: |
+          name="SUBSCRIPTION_ID_$(echo '${{ inputs.landing_zone }}' | tr '[:lower:]-' '[:upper:]_')"
+          id="${!name}"
+          if [ -z "$id" ]; then echo "::error::Set the repository secret $name"; exit 1; fi
+          echo "TF_VAR_subscription_id=$id" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         run: |
@@ -69,6 +85,15 @@ jobs:
       - name: Show the Plan for Review
         run: terraform show tfplan
 
+      # Artifacts of a public repo can be downloaded by any signed-in GitHub
+      # user, and a saved plan holds every input value, so only an encrypted
+      # copy is published.
+      - name: Encrypt the Plan
+        if: steps.plan.outputs.has_changes == 'true'
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in tfplan -out tfplan.enc -pass env:PLAN_ENCRYPTION_KEY
+          rm tfplan
+
       # The apply job uses this exact plan, so what you approve is what runs.
       - name: Publish Plan Artifact
         if: steps.plan.outputs.has_changes == 'true'
@@ -93,13 +118,17 @@ jobs:
       id-token: write
       contents: read
     env:
-      ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
       AZAPI_RETRY_GET_AFTER_PUT_MAX_TIME: "60m" # Management group permissions propagate slowly
     steps:
       - name: Download Plan Artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: plan-${{ inputs.landing_zone }}
+
+      - name: Decrypt the Plan
+        run: openssl enc -d -aes-256-cbc -pbkdf2 -in tfplan.enc -out tfplan -pass env:PLAN_ENCRYPTION_KEY
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1

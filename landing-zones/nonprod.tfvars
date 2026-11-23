@@ -1,12 +1,12 @@
-# Check by ID, not name: the two app subscription names were swapped on 2026-11-04.
+# The subscription ID comes from the SUBSCRIPTION_ID_NONPROD secret (check by ID, not name:
+# the two app subscription names were swapped on 2026-11-04). Budget alerts go
+# to the BUDGET_CONTACT_EMAIL secret.
 environment               = "nonprod"
-subscription_id           = "99ebe116-0532-43e3-bcf3-7a0b2a77bbcc"
 subscription_display_name = "gw-apps-nonprod"
 
 address_space = ["10.0.4.0/22"]
 
-budget_amount         = 20
-budget_contact_emails = ["graemewales13@gmail.com"]
+budget_amount = 20
 
 tags = {
   app             = "apps"
