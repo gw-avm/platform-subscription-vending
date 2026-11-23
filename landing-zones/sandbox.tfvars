@@ -1,16 +1,16 @@
 # Shared sandbox for learning-factory projects: one resource group, deploy
 # identity and budget per project (see sandbox.tf). No network: the sandbox
 # guardrails deny peering to the hub.
+# The subscription ID comes from the SUBSCRIPTION_ID_SANDBOX secret, and budget
+# alerts go to the BUDGET_CONTACT_EMAIL secret.
 app_landing_zone          = false
 workload                  = "sandbox"
 environment               = "dev"
-subscription_id           = "8d9fcd1d-99d7-4dbf-b0ad-d35d19fae8fa"
 subscription_display_name = "gw-sandbox"
 management_group_id       = "sandbox"
 
 # The whole subscription. Each project also has its own budget.
-budget_amount         = 20
-budget_contact_emails = ["graemewales13@gmail.com"]
+budget_amount = 20
 
 tags = {
   app             = "sandbox"

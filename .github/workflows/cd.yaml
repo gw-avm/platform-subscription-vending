@@ -34,5 +34,6 @@ jobs:
       id-token: write
       contents: read
     uses: ./.github/workflows/cd-template.yaml
+    secrets: inherit
     with:
       landing_zone: ${{ matrix.landing_zone }}

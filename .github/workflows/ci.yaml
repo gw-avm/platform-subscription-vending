@@ -50,6 +50,7 @@ jobs:
       id-token: write
       contents: read
     uses: ./.github/workflows/ci-template.yaml
+    secrets: inherit
     with:
       landing_zone: ${{ matrix.landing_zone }}
 

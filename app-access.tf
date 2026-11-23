@@ -153,14 +153,14 @@ resource "azapi_resource" "deploy_dns_zone_access" {
   count = var.app_landing_zone ? 1 : 0
 
   type      = "Microsoft.Authorization/roleAssignments@2022-04-01"
-  name      = uuidv5("url", "${var.postgres_private_dns_zone_id}/${var.subscription_id}/deploy")
-  parent_id = var.postgres_private_dns_zone_id
+  name      = uuidv5("url", "${local.postgres_private_dns_zone_id}/${var.subscription_id}/deploy")
+  parent_id = local.postgres_private_dns_zone_id
 
   body = {
     properties = {
       principalId      = module.landing_zone.umi_principal_ids["deploy"]
       principalType    = "ServicePrincipal"
-      roleDefinitionId = "${split("/resourceGroups/", var.postgres_private_dns_zone_id)[0]}/providers/Microsoft.Authorization/roleDefinitions/b12aa53e-6015-4669-85d0-8515ebb3ae7f" # Private DNS Zone Contributor
+      roleDefinitionId = "${split("/resourceGroups/", local.postgres_private_dns_zone_id)[0]}/providers/Microsoft.Authorization/roleDefinitions/b12aa53e-6015-4669-85d0-8515ebb3ae7f" # Private DNS Zone Contributor
     }
   }
 }

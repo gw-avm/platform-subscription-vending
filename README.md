@@ -48,6 +48,13 @@ inside their resource group.
 2. CI validates and plans every landing zone.
 3. Merge: CD plans again, then each apply waits for approval on `vending-prod-apply`.
 
+Subscription IDs and the budget email are repository secrets, not files, so
+they're masked in this public repo's logs: `SUBSCRIPTION_ID_<NAME>` for each
+landing zone (e.g. `SUBSCRIPTION_ID_PROD`), `SUBSCRIPTION_ID_CONNECTIVITY` (the
+hub and DNS zones), `BUDGET_CONTACT_EMAIL`, the `AZURE_*` sign-in IDs, and
+`PLAN_ENCRYPTION_KEY` (saved plans are published encrypted). A new landing
+zone needs its `SUBSCRIPTION_ID_<NAME>` secret before its first plan.
+
 A new subscription also needs adding to the vending bootstrap, so the apply
 identity gets Owner on it, and Management Group Contributor on its management
 group if that's a new one.

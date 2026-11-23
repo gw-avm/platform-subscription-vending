@@ -13,8 +13,8 @@ on:
         type: string
 
 env:
-  ARM_TENANT_ID: "${{ vars.AZURE_TENANT_ID }}"
-  ARM_SUBSCRIPTION_ID: "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
   ARM_USE_AZUREAD: true
   ARM_USE_OIDC: true
 
@@ -28,7 +28,9 @@ jobs:
       id-token: write
       contents: read
     env:
-      ARM_CLIENT_ID: "${{ vars.AZURE_CLIENT_ID }}"
+      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      TF_VAR_connectivity_subscription_id: ${{ secrets.SUBSCRIPTION_ID_CONNECTIVITY }}
+      TF_VAR_budget_contact_emails: '["${{ secrets.BUDGET_CONTACT_EMAIL }}"]'
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +40,19 @@ jobs:
         with:
           terraform_wrapper: false
           terraform_version: ${{ inputs.terraform_cli_version }}
+
+      # Identifiers are secrets, so they're masked in this public repo's logs.
+      # Each landing zone's subscription ID is in SUBSCRIPTION_ID_<NAME>.
+      - name: Select the Subscription
+        env:
+          SUBSCRIPTION_ID_NONPROD: ${{ secrets.SUBSCRIPTION_ID_NONPROD }}
+          SUBSCRIPTION_ID_PROD: ${{ secrets.SUBSCRIPTION_ID_PROD }}
+          SUBSCRIPTION_ID_SANDBOX: ${{ secrets.SUBSCRIPTION_ID_SANDBOX }}
+        run: |
+          name="SUBSCRIPTION_ID_$(echo '${{ inputs.landing_zone }}' | tr '[:lower:]-' '[:upper:]_')"
+          id="${!name}"
+          if [ -z "$id" ]; then echo "::error::Set the repository secret $name"; exit 1; fi
+          echo "TF_VAR_subscription_id=$id" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         run: |
